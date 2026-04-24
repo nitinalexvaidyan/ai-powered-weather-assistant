@@ -2,21 +2,33 @@
 from services.weather_service import get_weather
 from services.llm_service import generate_final_response
 
-def handle_tool_call(decision, user_input, request_id):
+def execute_tool(decision, user_input):
 
     tool_name = decision.get("tool_name")
     args = decision.get("arguments", {})
 
-    if tool_name != "get_weather":
-        return {"response": "Invalid tool requested"}
+    if tool_name == "get_weather":
+        location = args.get("location")
 
-    location = args.get("location")
+        if not location:
+            return "Error: location missing"
 
-    if not location:
-        return {"response": "Location is required"}
+        data = get_weather(location)
 
-    weather_data = get_weather(location)
+        # 🔥 Trim + structure output (VERY IMPORTANT)
+        try:
+            return f"Temp={data['main']['temp']}°C, Humidity={data['main']['humidity']}%, Condition={data['weather'][0]['description']}"
+        except Exception:
+            return "Weather data unavailable"
 
-    final_response = generate_final_response(user_input, weather_data)
+    elif tool_name == "weather_advice":
+        weather_data = args.get("weather_data")
+        user_query = args.get("user_query") or user_input
 
-    return {"response": final_response}
+        if not weather_data:
+            return "Error: missing weather data for advice"
+
+        return generate_final_response(user_query, weather_data)
+
+    else:
+        return "Error: Unknown tool"
