@@ -90,62 +90,82 @@ def generate_final_response(user_input: str, weather_data: str) -> str:
 # -------------------------------
 def build_agent_prompt(context: str) -> str:
     return f"""
-You are an AI assistant that decides whether to call a tool or respond directly.
+        You are an AI assistant that decides whether to call a tool or respond directly.
 
-You must ALWAYS return valid JSON.
-Do NOT return text outside JSON.
+        You must ALWAYS return valid JSON.
+        Do NOT return text outside JSON.
 
-Available Tools:
+        Available Tools:
 
-1. get_weather
-Description: Get weather for a city
-Arguments:
-- location (string)
+        1. get_weather
+        Description: Get weather for a city
+        Arguments:
+        - location (string)
 
-2. weather_advice
-Description: Provide advice based on weather data and user query
-Arguments:
-- weather_data (string)
-- user_query (string)
+        2. weather_advice
+        Description: Provide advice based on weather data and user query
+        Arguments:
+        - weather_data (string)
+        - user_query (string)
 
-Output formats:
+        Output formats:
 
-1. Tool call:
-{{
-  "action": "call_tool",
-  "tool_name": "<tool_name>",
-  "arguments": {{ ... }}
-}}
+        1. Tool call:
+        {{
+        "action": "call_tool",
+        "tool_name": "<tool_name>",
+        "arguments": {{ ... }}
+        }}
 
-2. Direct response:
-{{
-  "action": "respond",
-  "message": "<message>"
-}}
+        2. Direct response:
+        {{
+        "action": "respond",
+        "message": "<message>"
+        }}
 
-Rules:
-- Always return valid JSON
-- Use get_weather when weather data is needed
-- Use weather_advice when user asks for suggestions
-- If weather data is already available, DO NOT call get_weather again
-- Do NOT call the same tool repeatedly
-- Prefer responding if sufficient information is available
-- If required info is missing → ask user
+        Rules:
+        - Always return valid JSON
+        - Use get_weather when weather data is needed
+        - Use weather_advice when user asks for suggestions
+        - If weather data is already available, DO NOT call get_weather again
+        - Do NOT call the same tool repeatedly
+        - Prefer responding if sufficient information is available
+        - If required info is missing → ask user
 
-Conversation so far:
-{context}
+        Conversation so far:
+        {context}
 
-Decide the next action.
-"""
+        Decide the next action.
+    """
 
 
 def build_final_response_prompt(user_input: str, weather_data: str) -> str:
     return f"""
-User asked:
-"{user_input}"
+        User asked:
+        "{user_input}"
 
-Weather data:
-{weather_data}
+        Weather data:
+        {weather_data}
 
-Provide clear, short advice.
-"""
+        Provide clear, short advice.
+    """
+
+
+def summarize_memory(old_summary: str, new_messages: list) -> str:
+    try:
+        prompt = f"""
+            Existing summary:
+            {old_summary}
+
+            New conversation:
+            {chr(10).join(new_messages)}
+
+            Update the summary concisely.
+            Keep important details like location, user intent, and context.
+        """
+
+        return call_gemini(prompt).strip()
+
+    except Exception as e:
+        logging.error(f"Summarization failed: {e}")
+        return old_summary

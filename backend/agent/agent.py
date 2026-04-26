@@ -1,7 +1,7 @@
 # agent/agent.py
 import logging
 import uuid
-from services.llm_service import agent_decision
+from services.llm_service import agent_decision, summarize_memory
 from agent.tools import execute_tool
 from agent.fallback import fallback_pipeline
 from agent.memory import get_memory, update_memory
@@ -9,8 +9,12 @@ from agent.memory import get_memory, update_memory
 def run_agent(user_input: str, session_id: str):
 
     request_id = str(uuid.uuid4())
-    agent_state = get_memory(session_id).copy()
-    logging.info(f"[{request_id}] Loaded Memory: {agent_state}")
+
+    memory = get_memory(session_id)
+    agent_state = memory["messages"].copy()
+    summary = memory["summary"]
+    logging.info(f"[{request_id}] Loaded Memory: {agent_state}, Loaded summary: {summary}")
+    agent_state.insert(0, f"Summary: {summary}")
     agent_state.append(f"User: {user_input}")
 
     used_tools = set()
@@ -28,9 +32,9 @@ def run_agent(user_input: str, session_id: str):
             action = decision.get("action")
 
             if action == "respond":
-                logging.info(f"[{request_id}] Final Agent State: {agent_state}")
                 agent_state.append(f"Assistant: {decision.get('message')}")
-                update_memory(session_id, agent_state)
+                new_summary = summarize_memory(summary, agent_state)    # 🔥 Summarize old memory
+                update_memory(session_id, agent_state, new_summary)
                 return {"response": decision.get("message")}
 
             elif action == "call_tool":
@@ -47,13 +51,15 @@ def run_agent(user_input: str, session_id: str):
 
                 # Add structured tool info
                 agent_state.append(f"{tool_name} result: {tool_result}")
-                update_memory(session_id, agent_state)
+                update_memory(session_id, agent_state, summary)
 
             else:
                 raise ValueError("Invalid action")
-
-        # graceful exit
-        return {"response": "I couldn't fully process that, but here's what I found so far."}
+            
+        new_summary = summarize_memory(summary, agent_state)
+        update_memory(session_id, agent_state, new_summary)
+        return {"response": "I couldn't fully process that, but here's what I found so far."}   # graceful exit   
+       
 
     except Exception as e:
         logging.error(f"[{request_id}] Agent failed: {e}")
