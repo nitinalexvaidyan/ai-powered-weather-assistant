@@ -10,6 +10,7 @@ def run_agent(user_input: str, session_id: str):
 
     request_id = str(uuid.uuid4())
     agent_state = get_memory(session_id).copy()
+    logging.info(f"[{request_id}] Loaded Memory: {agent_state}")
     agent_state.append(f"User: {user_input}")
 
     used_tools = set()
@@ -45,8 +46,7 @@ def run_agent(user_input: str, session_id: str):
                 tool_result = execute_tool(decision, user_input)
 
                 # Add structured tool info
-                agent_state.append(f"Assistant: Calling {tool_name}")
-                agent_state.append(f"Tool Result ({tool_name}): {tool_result}")
+                agent_state.append(f"{tool_name} result: {tool_result}")
                 update_memory(session_id, agent_state)
 
             else:

@@ -7,7 +7,7 @@
       "request": "launch",
       "module": "uvicorn",
       "cwd": "${workspaceFolder}/backend",
-      "args": ["main:app", "--reload"],
+      "args": ["main:app"], //, "--reload"],
       "jinja": true,
       "python": "C:\\Users\\User\\NitinVaidyan\\ai-powered-weather-assistant\\backend\\venv\\Scripts\\python.exe"
     }
