@@ -9,7 +9,7 @@ from agent.memory import get_memory, update_memory
 def run_agent(user_input: str, session_id: str):
 
     request_id = str(uuid.uuid4())
-
+    trace = []
     memory = get_memory(session_id)
     agent_state = memory["messages"].copy()
     summary = memory["summary"]
@@ -32,8 +32,14 @@ def run_agent(user_input: str, session_id: str):
             logging.info(f"[{request_id}] Step {step} Decision: {decision}")
 
             action = decision.get("action")
+            step_trace = {
+                "step": steps_taken,
+                "action": action
+            }
+
 
             if action == "respond":
+                step_trace["message"] = decision.get("message")
                 agent_state.append(f"Assistant: {decision.get('message')}")
                 new_summary = summarize_memory(summary, agent_state)    # 🔥 Summarize old memory
                 update_memory(session_id, agent_state, new_summary)
@@ -41,11 +47,14 @@ def run_agent(user_input: str, session_id: str):
                     decision.get("message"),
                     session_id,
                     steps_taken,
-                    used_tools
+                    used_tools,
+                    trace
                 )
 
             elif action == "call_tool":
                 tool_name = decision.get("tool_name")
+                step_trace["tool"] = tool_name
+                trace.append(step_trace)
 
                 # 🔐 Prevent repeated tool calls
                 if tool_name in used_tools:
@@ -54,12 +63,14 @@ def run_agent(user_input: str, session_id: str):
                         "I already fetched that information. Let me respond with what I have.",
                         session_id,
                         steps_taken,
-                        used_tools
+                        used_tools,
+                        trace
                     )
 
                 used_tools.add(tool_name)
 
                 tool_result = execute_tool(decision, user_input)
+                step_trace["tool_result"] = str(tool_result)[:200]
 
                 # Add structured tool info
                 agent_state.append(f"{tool_name} result: {tool_result}")
@@ -74,7 +85,8 @@ def run_agent(user_input: str, session_id: str):
             "I couldn't fully process that, but here's what I found so far.",
             session_id,
             steps_taken,
-            used_tools
+            used_tools,
+            trace
         )   # graceful exit   
             
 
@@ -84,7 +96,8 @@ def run_agent(user_input: str, session_id: str):
             "Something went wrong. Falling back.",
             session_id,
             steps_taken,
-            used_tools
+            used_tools,
+            trace
         )
 
 
@@ -92,12 +105,13 @@ def format_agent_state(agent_state: list) -> str:
     return "\n".join(agent_state)
 
 
-def build_response(message, session_id, steps, tools):
+def build_response(message, session_id, steps, tools, trace):
     return {
         "response": message,
         "metadata": {
             "session_id": session_id,
             "steps": steps,
             "tools_used": list(tools)
-        }
+        },
+        "trace": trace
     }
