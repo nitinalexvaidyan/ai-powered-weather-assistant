@@ -3,17 +3,19 @@ import logging
 import uuid
 from services.llm_service import agent_decision, summarize_memory
 from agent.tools import execute_tool
-from agent.fallback import fallback_pipeline
 from agent.memory import get_memory, update_memory
 
 def run_agent(user_input: str, session_id: str):
 
     request_id = str(uuid.uuid4())
     trace = []
+
     memory = get_memory(session_id)
     agent_state = memory["messages"].copy()
     summary = memory["summary"]
-    logging.info(f"[{request_id}] Loaded Memory: {agent_state}, Loaded summary: {summary}")
+
+    logging.info(f"[{request_id}] Loaded Memory: {agent_state}, Summary: {summary}")
+
     agent_state.insert(0, f"Summary: {summary}")
     agent_state.append(f"User: {user_input}")
 
@@ -28,6 +30,7 @@ def run_agent(user_input: str, session_id: str):
             context = format_agent_state(agent_state)
             logging.info(f"[{request_id}] Step {step} Context:\n{context}")
 
+            # ---------------- LLM DECISION ----------------
             try:
                 decision = agent_decision(context)
             except Exception as e:
@@ -44,45 +47,57 @@ def run_agent(user_input: str, session_id: str):
                         "message": str(e)
                     }
                 )
+
             logging.info(f"[{request_id}] Step {step} Decision: {decision}")
 
             action = decision.get("action")
+
             step_trace = {
                 "step": steps_taken,
                 "action": action
             }
 
-
+            # ---------------- RESPOND ----------------
             if action == "respond":
                 step_trace["message"] = decision.get("message")
+                trace.append(step_trace)
+
                 agent_state.append(f"Assistant: {decision.get('message')}")
-                new_summary = summarize_memory(summary, agent_state)    # 🔥 Summarize old memory
+
+                new_summary = summarize_memory(summary, agent_state)
+
                 try:
                     update_memory(session_id, agent_state, new_summary)
                 except Exception as e:
                     logging.error(f"[{request_id}] Memory failure: {e}")
+
                 return build_response(
                     decision.get("message"),
                     session_id,
                     steps_taken,
                     used_tools,
-                    trace
+                    trace,
+                    None
                 )
 
+            # ---------------- TOOL CALL ----------------
             elif action == "call_tool":
                 tool_name = decision.get("tool_name")
                 step_trace["tool"] = tool_name
-                trace.append(step_trace)
 
-                # 🔐 Prevent repeated tool calls
+                # Prevent duplicate tool calls
                 if tool_name in used_tools:
                     logging.warning(f"[{request_id}] Tool '{tool_name}' already used. Skipping.")
+
+                    trace.append(step_trace)
+
                     return build_response(
                         "I already fetched that information. Let me respond with what I have.",
                         session_id,
                         steps_taken,
                         used_tools,
-                        trace
+                        trace,
+                        None
                     )
 
                 used_tools.add(tool_name)
@@ -91,6 +106,8 @@ def run_agent(user_input: str, session_id: str):
                     tool_result = execute_tool(decision, user_input)
                 except Exception as e:
                     logging.error(f"[{request_id}] Tool failure: {e}")
+
+                    trace.append(step_trace)
 
                     return build_response(
                         "I couldn't fetch the required data.",
@@ -103,19 +120,27 @@ def run_agent(user_input: str, session_id: str):
                             "message": str(e)
                         }
                     )
-                step_trace["tool_result"] = str(tool_result)[:200]
 
-                # Add structured tool info
+                step_trace["tool_result"] = str(tool_result)[:200]
+                trace.append(step_trace)
+
                 agent_state.append(f"{tool_name} result: {tool_result}")
+
                 try:
                     update_memory(session_id, agent_state, summary)
                 except Exception as e:
                     logging.error(f"[{request_id}] Memory failure: {e}")
 
+            # ---------------- UNKNOWN ----------------
             else:
+                logging.error(f"[{request_id}] Unknown action")
+
+                trace.append(step_trace)
+
                 new_summary = summarize_memory(summary, agent_state)
+
                 try:
-                    update_memory(session_id, agent_state, summary)
+                    update_memory(session_id, agent_state, new_summary)
                 except Exception as e:
                     logging.error(f"[{request_id}] Memory failure: {e}")
 
@@ -127,12 +152,23 @@ def run_agent(user_input: str, session_id: str):
                     trace,
                     {
                         "type": ErrorType.UNKNOWN,
-                        "message": "unknown type of failure"
+                        "message": "Unknown action from LLM"
                     }
-                ) 
-            
+                )
+
+        # ---------------- LOOP EXIT ----------------
+        return build_response(
+            "I couldn't fully process that, but here's what I found so far.",
+            session_id,
+            steps_taken,
+            used_tools,
+            trace,
+            None
+        )
+
     except Exception as e:
         logging.error(f"[{request_id}] Agent failed: {e}")
+
         return build_response(
             "Something went wrong. Falling back.",
             session_id,
@@ -141,7 +177,7 @@ def run_agent(user_input: str, session_id: str):
             trace,
             {
                 "type": ErrorType.UNKNOWN,
-                "message": str(e) 
+                "message": str(e)
             }
         )
 
@@ -152,6 +188,7 @@ def format_agent_state(agent_state: list) -> str:
 
 def build_response(message, session_id, steps, tools, trace, error=None):
     return {
+        "success": error is None,
         "response": message,
         "metadata": {
             "session_id": session_id,
@@ -159,8 +196,10 @@ def build_response(message, session_id, steps, tools, trace, error=None):
             "tools_used": list(tools)
         },
         "trace": trace,
-        "error": error
+        "error": error,
+        "timestamp": datetime.utcnow().isoformat()
     }
+
 
 class ErrorType:
     LLM_FAILURE = "LLM_FAILURE"
