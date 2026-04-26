@@ -11,5 +11,5 @@ def home():
     return {"success": True, "message": "Welcome to homepage"}
 
 @app.get("/weather")
-def weather(query: str):
-    return run_agent(query)
+def weather(query: str, session_id: str):
+    return run_agent(query, session_id)

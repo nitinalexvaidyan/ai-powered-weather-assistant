@@ -4,11 +4,14 @@ import uuid
 from services.llm_service import agent_decision
 from agent.tools import execute_tool
 from agent.fallback import fallback_pipeline
+from agent.memory import get_memory, update_memory
 
-def run_agent(user_input: str):
+def run_agent(user_input: str, session_id: str):
 
     request_id = str(uuid.uuid4())
-    agent_state = [f"User: {user_input}"]
+    agent_state = get_memory(session_id).copy()
+    agent_state.append(f"User: {user_input}")
+
     used_tools = set()
     max_steps = 3
 
@@ -25,6 +28,8 @@ def run_agent(user_input: str):
 
             if action == "respond":
                 logging.info(f"[{request_id}] Final Agent State: {agent_state}")
+                agent_state.append(f"Assistant: {decision.get('message')}")
+                update_memory(session_id, agent_state)
                 return {"response": decision.get("message")}
 
             elif action == "call_tool":
@@ -42,6 +47,7 @@ def run_agent(user_input: str):
                 # Add structured tool info
                 agent_state.append(f"Assistant: Calling {tool_name}")
                 agent_state.append(f"Tool Result ({tool_name}): {tool_result}")
+                update_memory(session_id, agent_state)
 
             else:
                 raise ValueError("Invalid action")

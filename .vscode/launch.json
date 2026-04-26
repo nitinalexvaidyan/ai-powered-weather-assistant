@@ -1,0 +1,15 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "FastAPI Debug",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      "cwd": "${workspaceFolder}/backend",
+      "args": ["main:app", "--reload"],
+      "jinja": true,
+      "python": "C:\\Users\\User\\NitinVaidyan\\ai-powered-weather-assistant\\backend\\venv\\Scripts\\python.exe"
+    }
+  ]
+}
