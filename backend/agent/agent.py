@@ -28,7 +28,22 @@ def run_agent(user_input: str, session_id: str):
             context = format_agent_state(agent_state)
             logging.info(f"[{request_id}] Step {step} Context:\n{context}")
 
-            decision = agent_decision(context)
+            try:
+                decision = agent_decision(context)
+            except Exception as e:
+                logging.error(f"[{request_id}] LLM failure: {e}")
+
+                return build_response(
+                    "I'm having trouble understanding your request right now.",
+                    session_id,
+                    steps_taken,
+                    used_tools,
+                    trace,
+                    {
+                        "type": ErrorType.LLM_FAILURE,
+                        "message": str(e)
+                    }
+                )
             logging.info(f"[{request_id}] Step {step} Decision: {decision}")
 
             action = decision.get("action")
@@ -42,7 +57,10 @@ def run_agent(user_input: str, session_id: str):
                 step_trace["message"] = decision.get("message")
                 agent_state.append(f"Assistant: {decision.get('message')}")
                 new_summary = summarize_memory(summary, agent_state)    # 🔥 Summarize old memory
-                update_memory(session_id, agent_state, new_summary)
+                try:
+                    update_memory(session_id, agent_state, new_summary)
+                except Exception as e:
+                    logging.error(f"[{request_id}] Memory failure: {e}")
                 return build_response(
                     decision.get("message"),
                     session_id,
@@ -69,27 +87,50 @@ def run_agent(user_input: str, session_id: str):
 
                 used_tools.add(tool_name)
 
-                tool_result = execute_tool(decision, user_input)
+                try:
+                    tool_result = execute_tool(decision, user_input)
+                except Exception as e:
+                    logging.error(f"[{request_id}] Tool failure: {e}")
+
+                    return build_response(
+                        "I couldn't fetch the required data.",
+                        session_id,
+                        steps_taken,
+                        used_tools,
+                        trace,
+                        {
+                            "type": ErrorType.TOOL_FAILURE,
+                            "message": str(e)
+                        }
+                    )
                 step_trace["tool_result"] = str(tool_result)[:200]
 
                 # Add structured tool info
                 agent_state.append(f"{tool_name} result: {tool_result}")
-                update_memory(session_id, agent_state, summary)
+                try:
+                    update_memory(session_id, agent_state, summary)
+                except Exception as e:
+                    logging.error(f"[{request_id}] Memory failure: {e}")
 
             else:
-                raise ValueError("Invalid action")
-            
-        new_summary = summarize_memory(summary, agent_state)
-        update_memory(session_id, agent_state, new_summary)
-        return build_response(
-            "I couldn't fully process that, but here's what I found so far.",
-            session_id,
-            steps_taken,
-            used_tools,
-            trace
-        )   # graceful exit   
-            
+                new_summary = summarize_memory(summary, agent_state)
+                try:
+                    update_memory(session_id, agent_state, summary)
+                except Exception as e:
+                    logging.error(f"[{request_id}] Memory failure: {e}")
 
+                return build_response(
+                    "Something went wrong.",
+                    session_id,
+                    steps_taken,
+                    used_tools,
+                    trace,
+                    {
+                        "type": ErrorType.UNKNOWN,
+                        "message": "unknown type of failure"
+                    }
+                ) 
+            
     except Exception as e:
         logging.error(f"[{request_id}] Agent failed: {e}")
         return build_response(
@@ -97,7 +138,11 @@ def run_agent(user_input: str, session_id: str):
             session_id,
             steps_taken,
             used_tools,
-            trace
+            trace,
+            {
+                "type": ErrorType.UNKNOWN,
+                "message": str(e) 
+            }
         )
 
 
@@ -105,7 +150,7 @@ def format_agent_state(agent_state: list) -> str:
     return "\n".join(agent_state)
 
 
-def build_response(message, session_id, steps, tools, trace):
+def build_response(message, session_id, steps, tools, trace, error=None):
     return {
         "response": message,
         "metadata": {
@@ -113,5 +158,12 @@ def build_response(message, session_id, steps, tools, trace):
             "steps": steps,
             "tools_used": list(tools)
         },
-        "trace": trace
+        "trace": trace,
+        "error": error
     }
+
+class ErrorType:
+    LLM_FAILURE = "LLM_FAILURE"
+    TOOL_FAILURE = "TOOL_FAILURE"
+    MEMORY_FAILURE = "MEMORY_FAILURE"
+    UNKNOWN = "UNKNOWN"

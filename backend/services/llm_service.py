@@ -90,10 +90,11 @@ def generate_final_response(user_input: str, weather_data: str) -> str:
 # -------------------------------
 def build_agent_prompt(context: str) -> str:
     return f"""
-        You are an AI assistant that decides whether to call a tool or respond directly.
+        You are an AI assistant that decides whether to call a tool or respond directly for weather related queries.
 
         You must ALWAYS return valid JSON.
         Do NOT return text outside JSON.
+        You are supposed to respond to only weather related questions.
 
         Available Tools:
 
