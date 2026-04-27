@@ -25,21 +25,29 @@ def llm_node(state):
 def tool_node(state):
     decision = state["decision"]
     trace = state.get("trace", []).copy()
+
     result = execute_tool(decision, state["user_input"])
 
-    # 🔥 Update last trace entry
+    # Update trace
     if trace:
         trace[-1]["tool_result"] = str(result)[:200]
 
     messages = state.get("messages", []).copy()
-    messages.append(f"{decision.get('tool_name')} result: {result}")
+
+    tool_name = decision.get("tool_name")
+
+    # 🔥 CRITICAL: Add structured memory
+    if tool_name == "get_weather":
+        messages.append(f"Weather Data: {result}")
+
+    elif tool_name == "weather_advice":
+        messages.append(f"Advice: {result}")
 
     return {
         "tool_result": str(result),
         "messages": messages,
         "trace": trace
     }
-
 
 def respond_node(state):
     decision = state["decision"]
