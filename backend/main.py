@@ -2,7 +2,6 @@ from datetime import datetime
 import logging
 from fastapi import FastAPI
 from agent.agent import run_agent
-from agent.langgraph_agent import run_langgraph_agent
 from agent.langgraph import runner
 
 logging.basicConfig(level=logging.INFO)
@@ -24,5 +23,5 @@ def weather(query: str, session_id: str):
 
 
 @app.get("/ask")
-def ask(query: str):
-    return runner.run_langgraph_agent(query)
+def ask(query: str, session_id: str):
+    return runner.run_langgraph_agent(query, session_id)

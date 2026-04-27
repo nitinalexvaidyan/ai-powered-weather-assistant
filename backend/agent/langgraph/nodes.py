@@ -4,27 +4,57 @@ from services.llm_service import agent_decision
 from agent.tools import execute_tool
 
 def llm_node(state):
-    user_input = state["user_input"]
-    tool_result = state.get("tool_result", "")
-
-    if tool_result:
-        context = f"""
-            User: {user_input}
-            Tool Result: {tool_result}
-        """
-    else:
-        context = f"User: {user_input}"
-
+    messages = state.get("messages", [])[-6:]
+    trace = state.get("trace", []).copy()
+    context = "\n".join(messages)
     decision = agent_decision(context)
-    return {"decision": decision}
+
+    # 🔥 Add trace
+    trace.append({
+        "step": len(trace) + 1,
+        "action": decision.get("action"),
+        "tool": decision.get("tool_name")
+    })
+
+    return {
+        "decision": decision,
+        "trace": trace
+    }
 
 
 def tool_node(state):
     decision = state["decision"]
+    trace = state.get("trace", []).copy()
     result = execute_tool(decision, state["user_input"])
-    return {"tool_result": str(result)}
+
+    # 🔥 Update last trace entry
+    if trace:
+        trace[-1]["tool_result"] = str(result)[:200]
+
+    messages = state.get("messages", []).copy()
+    messages.append(f"{decision.get('tool_name')} result: {result}")
+
+    return {
+        "tool_result": str(result),
+        "messages": messages,
+        "trace": trace
+    }
 
 
 def respond_node(state):
-    message = state["decision"].get("message", "")
-    return {"final_response": message}
+    decision = state["decision"]
+    trace = state.get("trace", []).copy()
+    message = decision.get("message", "")
+
+    # 🔥 Update trace
+    if trace:
+        trace[-1]["message"] = message
+
+    messages = state.get("messages", []).copy()
+    messages.append(f"Assistant: {message}")
+
+    return {
+        "final_response": message,
+        "messages": messages,
+        "trace": trace
+    }
