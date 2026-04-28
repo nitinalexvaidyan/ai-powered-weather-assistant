@@ -3,7 +3,7 @@ from datetime import datetime
 import logging
 import uuid
 from services.llm_service import agent_decision, summarize_memory
-from agent.tools import execute_tool
+from agent.tools.registry import execute_tool
 from agent.memory import get_memory, update_memory
 
 def run_agent(user_input: str, session_id: str):

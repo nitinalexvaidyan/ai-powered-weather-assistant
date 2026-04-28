@@ -1,7 +1,7 @@
 # agent/langgraph/nodes.py -->  # llm_node, tool_node, respond_node
 
 from services.llm_service import agent_decision
-from agent.tools import execute_tool
+from agent.tools.registry import execute_tool
 
 def llm_node(state):
     messages = state.get("messages", [])[-6:]
@@ -22,26 +22,21 @@ def llm_node(state):
     }
 
 
+
 def tool_node(state):
     decision = state["decision"]
     trace = state.get("trace", []).copy()
 
-    result = execute_tool(decision, state["user_input"])
+    tool_name = decision.get("tool_name")
+    args = decision.get("arguments", {})
 
-    # Update trace
+    result = execute_tool(tool_name, args, state["user_input"])
+
     if trace:
         trace[-1]["tool_result"] = str(result)[:200]
 
     messages = state.get("messages", []).copy()
-
-    tool_name = decision.get("tool_name")
-
-    # 🔥 CRITICAL: Add structured memory
-    if tool_name == "get_weather":
-        messages.append(f"Weather Data: {result}")
-
-    elif tool_name == "weather_advice":
-        messages.append(f"Advice: {result}")
+    messages.append(f"{tool_name} result: {result}")
 
     return {
         "tool_result": str(result),
