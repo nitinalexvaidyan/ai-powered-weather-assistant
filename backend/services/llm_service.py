@@ -6,6 +6,9 @@ import os
 import logging
 from dotenv import load_dotenv
 from utils.parser import safe_parse_json
+from services.cache_service import get_cache, set_cache, build_cache_key
+from services.circuit_breaker import is_circuit_open, record_failure, record_success
+
 
 load_dotenv()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
@@ -15,7 +18,20 @@ logging.info(f"GEMINI_API_KEY: {GEMINI_API_KEY}")
 # -------------------------------
 # 🔹 Core Gemini Caller (with retry + backoff)
 # -------------------------------
-def call_gemini(prompt: str, retries=4) -> str:
+def call_gemini(prompt: str, retries=3, cache_ttl=900) -> str:
+    # 🔴 Step 1: Circuit check
+    if is_circuit_open():
+        print("[CIRCUIT OPEN] Skipping LLM call")
+        raise Exception("LLM service temporarily unavailable")
+    
+    cache_key = build_cache_key("llm", prompt)
+
+    # 🔥 Step 1: Check cache
+    cached = get_cache(cache_key)
+    if cached:
+        print(f"[LLM CACHE HIT]")
+        return cached
+    
     models = [ "gemini-3.1-flash-lite-preview", "gemini-2.5-flash-lite", "gemini-2.5-flash"]
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{models[0]}:generateContent?key={GEMINI_API_KEY}"
 
@@ -27,36 +43,29 @@ def call_gemini(prompt: str, retries=4) -> str:
 
     for attempt in range(retries):
         try:
-            timeout = 20 + attempt * 2  # 🔥 increase timeout
+            response = requests.post(url, json=payload, timeout=25)
 
-            response = requests.post(url, json=payload, timeout=timeout)
-
-            # 🔥 Handle rate limit
             if response.status_code == 429:
-                wait = 2 ** attempt
-                logging.warning(f"429 Rate limit. Retry in {wait}s")
-                time.sleep(wait)
+                time.sleep(2 ** attempt)
                 continue
 
-            # 🔥 Handle server issues
             if response.status_code >= 500:
-                wait = 2 ** attempt
-                logging.warning(f"{response.status_code} Server error. Retry in {wait}s")
-                time.sleep(wait)
+                time.sleep(2 ** attempt)
                 continue
 
             response.raise_for_status()
 
             data = response.json()
-            return data['candidates'][0]['content']['parts'][0]['text']
+            result = data['candidates'][0]['content']['parts'][0]['text']
+            
+            record_success()    # ✅ success
 
-        except requests.exceptions.Timeout:
-            wait = 2 ** attempt
-            logging.warning(f"Timeout. Retry in {wait}s")
-            time.sleep(wait)
+            # 🔥 Step 2: Store in cache
+            set_cache(cache_key, result, ttl=cache_ttl)
 
-        except Exception as e:
-            logging.error(f"Gemini failed (attempt {attempt}): {e}")
+            return result
+
+        except Exception:
             time.sleep(1)
 
     raise Exception("Gemini failed after retries")
@@ -69,7 +78,7 @@ def agent_decision(prompt: str, retries: int = 1) -> dict:
 
     for attempt in range(retries + 1):
         try:
-            raw_text = call_gemini(prompt)
+            raw_text = call_gemini(prompt, cache_ttl=900)
             logging.info(f"[LLM RAW] {raw_text}")
 
             cleaned_text = raw_text.replace("```json", "").replace("```", "").strip()
@@ -100,7 +109,7 @@ def summarize_memory(old_summary: str, new_messages: list) -> str:
             Keep important details like location, user intent, and context.
         """
 
-        return call_gemini(prompt).strip()
+        return call_gemini(prompt, cache_ttl=900).strip()
 
     except Exception as e:
         logging.error(f"Summarization failed: {e}")
