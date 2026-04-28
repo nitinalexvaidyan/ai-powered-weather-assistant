@@ -1,8 +1,14 @@
 from agent.tools.registry import register_tool
-from services.llm_service import generate_final_response
+from services.response_service import generate_final_response
 
-
-@register_tool("weather_advice")
+@register_tool(
+    name="weather_advice",
+    description="Provide advice based on weather data",
+    args_schema={
+        "weather_data": "string",
+        "user_query": "string"
+    }
+)
 def weather_advice_tool(args, user_input):
     weather_data = args.get("weather_data")
     user_query = args.get("user_query")

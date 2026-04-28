@@ -17,7 +17,7 @@ logging.info(f"GEMINI_API_KEY: {GEMINI_API_KEY}")
 # -------------------------------
 def call_gemini(prompt: str, retries=4) -> str:
     models = [ "gemini-3.1-flash-lite-preview", "gemini-2.5-flash-lite", "gemini-2.5-flash"]
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{models[1]}:generateContent?key={GEMINI_API_KEY}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{models[0]}:generateContent?key={GEMINI_API_KEY}"
 
     payload = {
         "contents": [{
@@ -65,8 +65,7 @@ def call_gemini(prompt: str, retries=4) -> str:
 # -------------------------------
 # 🔹 Agent Decision
 # -------------------------------
-def agent_decision(context: str, retries: int = 1) -> dict:
-    prompt = build_agent_prompt(context)
+def agent_decision(prompt: str, retries: int = 1) -> dict:
 
     for attempt in range(retries + 1):
         try:
@@ -86,87 +85,6 @@ def agent_decision(context: str, retries: int = 1) -> dict:
             logging.warning(f"LLM decision attempt {attempt} failed: {e}")
 
     raise Exception("LLM decision failed after retries")
-
-
-# -------------------------------
-# 🔹 Final Response Generator
-# -------------------------------
-def generate_final_response(user_input: str, weather_data: str) -> str:
-    try:
-        prompt = build_final_response_prompt(user_input, weather_data)
-        raw_text = call_gemini(prompt)
-        return raw_text.strip()
-
-    except Exception as e:
-        logging.error(f"Final response generation failed: {e}")
-        return "I couldn't process the advice properly, but weather data is available."
-
-
-# -------------------------------
-# 🔹 Prompt Builders
-# -------------------------------
-def build_agent_prompt(context: str) -> str:
-    return f"""
-        You are an AI assistant that decides whether to call a tool or respond directly for weather related queries.
-
-        You must ALWAYS return valid JSON.
-        Do NOT return text outside JSON.
-        You are supposed to respond to only weather related questions.
-
-        Available Tools:
-
-        1. get_weather
-        Description: Get weather for a city
-        Arguments:
-        - location (string)
-
-        2. weather_advice
-        Description: Provide advice based on weather data and user query
-        Arguments:
-        - weather_data (string)
-        - user_query (string)
-
-        Output formats:
-
-        1. Tool call:
-        {{
-        "action": "call_tool",
-        "tool_name": "<tool_name>",
-        "arguments": {{ ... }}
-        }}
-
-        2. Direct response:
-        {{
-        "action": "respond",
-        "message": "<message>"
-        }}
-
-        Rules:
-        - Always return valid JSON
-        - Use get_weather when weather data is needed
-        - Use weather_advice when user asks for suggestions
-        - If weather data is already available, DO NOT call get_weather again
-        - Do NOT call the same tool repeatedly
-        - Prefer responding if sufficient information is available
-        - If required info is missing → ask user
-
-        Conversation so far:
-        {context}
-
-        Decide the next action.
-    """
-
-
-def build_final_response_prompt(user_input: str, weather_data: str) -> str:
-    return f"""
-        User asked:
-        "{user_input}"
-
-        Weather data:
-        {weather_data}
-
-        Provide clear, short advice.
-    """
 
 
 def summarize_memory(old_summary: str, new_messages: list) -> str:

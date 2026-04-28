@@ -5,7 +5,6 @@ from agent.langgraph.graph_builder import build_graph
 from agent.langgraph.memory_store import get_session_memory, update_session_memory
 
 
-
 graph = build_graph()
 
 def run_langgraph_agent(user_input: str, session_id: str):

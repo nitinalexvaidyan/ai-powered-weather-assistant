@@ -2,14 +2,15 @@
 
 from services.llm_service import agent_decision
 from agent.tools.registry import execute_tool
+from agent.prompt_builder import build_agent_prompt
 
 def llm_node(state):
     messages = state.get("messages", [])[-6:]
     trace = state.get("trace", []).copy()
     context = "\n".join(messages)
-    decision = agent_decision(context)
+    prompt = build_agent_prompt(context)
+    decision = agent_decision(prompt)
 
-    # 🔥 Add trace
     trace.append({
         "step": len(trace) + 1,
         "action": decision.get("action"),
@@ -20,7 +21,6 @@ def llm_node(state):
         "decision": decision,
         "trace": trace
     }
-
 
 
 def tool_node(state):
