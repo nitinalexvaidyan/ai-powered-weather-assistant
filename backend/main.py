@@ -1,8 +1,9 @@
 from datetime import datetime
 import logging
 from fastapi import FastAPI
-from agent.agent import run_agent
-from agent.langgraph import runner
+from agents.router.router_agent import RouterAgent
+
+router = RouterAgent()
 
 logging.basicConfig(level=logging.INFO)
 
@@ -17,11 +18,7 @@ def home():
         "timestamp": datetime.utcnow().isoformat()
     }
 
-@app.get("/weather")
-def weather(query: str, session_id: str):
-    return run_agent(query, session_id)
-
 
 @app.get("/ask")
 def ask(query: str, session_id: str):
-    return runner.run_langgraph_agent(query, session_id)
+    return router.route(query, session_id)

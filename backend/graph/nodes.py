@@ -1,14 +1,14 @@
 # agent/langgraph/nodes.py -->  # llm_node, tool_node, respond_node
 
+from prompts.prompt_builder import build_agent_prompt
 from services.llm_service import agent_decision
-from agent.tools.registry import execute_tool
-from agent.prompt_builder import build_agent_prompt
+from tools.registry import execute_tool
 
 def llm_node(state):
     messages = state.get("messages", [])[-6:]
     trace = state.get("trace", []).copy()
     context = "\n".join(messages)
-    prompt = build_agent_prompt(context)
+    prompt = build_agent_prompt(context, state)
     decision = agent_decision(prompt)
 
     trace.append({
@@ -29,8 +29,15 @@ def tool_node(state):
 
     tool_name = decision.get("tool_name")
     args = decision.get("arguments", {})
+    tools = state.get("tools", {})
+    tool_fn = tools.get(tool_name)
 
-    result = execute_tool(tool_name, args, state["user_input"])
+    if not tool_fn:
+        return {"tool_result": "Invalid tool"}
+
+    result = tool_fn(args)
+
+    # result = execute_tool(tool_name, args, state["user_input"])
 
     if trace:
         trace[-1]["tool_result"] = str(result)[:200]

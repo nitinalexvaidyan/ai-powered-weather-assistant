@@ -1,4 +1,4 @@
-from agent.tools.registry import register_tool
+from tools.registry import register_tool
 from services.response_service import generate_final_response
 
 @register_tool(

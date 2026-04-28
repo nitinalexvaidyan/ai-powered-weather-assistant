@@ -1,9 +1,9 @@
 # agent/langgraph/graph_builder.py --> # graph construction
 
 from langgraph.graph import StateGraph
-from agent.langgraph.state import AgentState
-from agent.langgraph.nodes import llm_node, tool_node, respond_node
-from agent.langgraph.routing import route_decision
+from graph.state import AgentState
+from graph.nodes import llm_node, tool_node, respond_node
+from graph.routing import route_decision
 
 
 def build_graph():

@@ -1,4 +1,4 @@
-from agent.tools.registry import register_tool
+from tools.registry import register_tool
 from services.weather_service import get_forecast, get_weather
 from services.cache_service import get_cache, set_cache
 
@@ -18,7 +18,7 @@ def weather_tool(args, user_input):
     if not location:
         return "Error: location missing"
 
-    cache_key = f"weather:{location.lower()-{date}}"
+    cache_key = f"weather:{location.lower()}-{date}"
 
     # 🔥 Step 1: Check cache
     cached = get_cache(cache_key)

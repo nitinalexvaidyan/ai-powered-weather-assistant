@@ -1,8 +1,7 @@
-# agent/prompt_builder.py
+# prompts/prompt_builder.py
 
 from datetime import datetime
-
-from agent.tools.registry import TOOL_REGISTRY
+from tools.registry import TOOL_REGISTRY
 
 
 def build_tools_prompt() -> str:
@@ -17,13 +16,18 @@ def build_tools_prompt() -> str:
     return "\n".join(tool_descriptions)
 
 
-def build_agent_prompt(context: str) -> str:
-    tools = build_tools_prompt()
+def build_agent_prompt(context: str, state) -> str:
+    # tools = build_tools_prompt()
+    tools = state.get("tools", {})
+
+    tool_list = "\n".join([
+        f"{name}" for name in tools.keys()
+    ])
     return f"""
         You are an AI assistant that decides whether to call a tool or respond directly for weather related queries.
         
         Available Tools:
-            {tools}
+            {tool_list}
 
         Output formats:
             1. Tool call:
