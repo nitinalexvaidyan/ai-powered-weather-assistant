@@ -1,5 +1,7 @@
 # agent/prompt_builder.py
 
+from datetime import datetime
+
 from agent.tools.registry import TOOL_REGISTRY
 
 
@@ -42,6 +44,8 @@ def build_agent_prompt(context: str) -> str:
         - Always return valid JSON and never return text outside JSON.
         - Prefer responding if sufficient information is available instead of fetching the data again.
         - If required info is missing in the user input → ask user
+        - Extract date if user asks about future and Pass date in YYYY-MM-DD format
+        - Todays date is {datetime.now()}
 
         Conversation so far:
             {context}
